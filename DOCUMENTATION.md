@@ -560,18 +560,73 @@ Test file: `__tests__/security/xss.test.tsx`
 ## Logic and Performance Issues
 
 ### PERF-401: Account Creation Error
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Critical
 **Reporter**: Support Team
 
 #### Root Cause
-[To be documented]
+The createAccount mutation in the account router had a fallback object that was returned when the database fetch failed after a successful account insertion. This fallback object contained incorrect data:
+- Balance was set to $100 instead of $0 (the actual inserted value)
+- Status was set to "pending" instead of "active" (the actual inserted value)
+- ID was set to 0, which is invalid for a database record
+
+**Affected File:**
+- `server/routers/account.ts:58-68` - Fallback object with incorrect balance
+
+**Why This Happened:**
+The fallback was likely added as a misguided defensive programming measure to handle database fetch failures. However, if the insert succeeds, the fetch should always succeed unless there's a serious database issue that needs proper error handling.
 
 #### Fix
-[To be documented]
+Removed the fallback object entirely and replaced it with proper error handling that matches the pattern used elsewhere in the codebase:
+
+**Backend Change** ([server/routers/account.ts:58-65](server/routers/account.ts#L58)):
+- Removed the fallback object with incorrect balance
+- Added proper error handling with TRPCError
+- Throws INTERNAL_SERVER_ERROR if fetch fails after successful insert
+- Error message guides users to refresh and retry
+
+**Implementation:**
+```typescript
+const account = await db.select().from(accounts)
+  .where(eq(accounts.accountNumber, accountNumber!)).get();
+
+if (!account) {
+  throw new TRPCError({
+    code: "INTERNAL_SERVER_ERROR",
+    message: "Account was created but could not be retrieved. Please refresh and try again.",
+  });
+}
+
+return account;
+```
+
+**Key Improvements:**
+1. Data consistency - Users only see actual database values
+2. No phantom balances - Eliminates the $100 display error
+3. Proper error handling - Clear message when issues occur
+4. Consistent pattern - Matches error handling in auth.ts
+
+#### Test Results
+All 15 account creation tests passing:
+```
+✅ Correct Balance Validation: 3/3 passing
+✅ Fallback Object Tests: 2/2 passing
+✅ Database Failure Handling: 2/2 passing
+✅ Data Consistency: 2/2 passing
+✅ Account Type Validation: 3/3 passing
+✅ Financial Accuracy: 2/2 passing
+✅ Integration Tests: 1/1 passing
+```
+
+Test file: `__tests__/api/accountCreation.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 15 unit tests verifying correct balance, proper error handling, and data consistency
+2. **Consistent Error Handling**: Following established patterns from auth router prevents confusion
+3. **No Fallback Objects**: Database operations should fail properly rather than hide issues
+4. **Financial Accuracy**: Critical for banking apps - never show incorrect balances
+5. **Clear Error Messages**: Users understand the issue and can take action (refresh/retry)
+6. **Code Reviews**: Future fallback objects should be questioned - fail fast, fail clearly
 
 ---
 
@@ -690,11 +745,11 @@ Test file: `__tests__/security/xss.test.tsx`
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 5
-- **Not Fixed**: 20
+- **Fixed**: 6
+- **Not Fixed**: 19
 
 ### By Priority
-- **Critical**: 5/8 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303)
+- **Critical**: 6/8 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401)
 - **High**: 0/8 fixed
 - **Medium**: 0/9 fixed
 
