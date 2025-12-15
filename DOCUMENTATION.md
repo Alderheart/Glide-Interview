@@ -26,18 +26,64 @@ This document tracks all reported bugs, their root causes, fixes, and preventive
 ## Validation Issues
 
 ### VAL-201: Email Validation Problems
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: High
 **Reporter**: James Wilson
 
 #### Root Cause
-[To be documented]
+The email validation was inconsistent between signup and login endpoints, causing authentication failures when users tried to login with mixed-case emails:
+
+**The Bug:**
+- **Signup** ([server/routers/auth.ts:16](server/routers/auth.ts#L16)): Used `z.string().email().toLowerCase()` - automatically converted emails to lowercase
+- **Login** ([server/routers/auth.ts:157](server/routers/auth.ts#L157)): Used `z.string().email()` - didn't convert to lowercase
+
+**Impact:**
+1. User signs up with "TEST@example.com" → stored as "test@example.com" (auto-lowercased)
+2. User tries to login with "TEST@example.com" → query looks for exact match, fails to find user
+3. Authentication failure even with correct credentials
+
+**Additional Issues:**
+- Silent conversion without user notification
+- No validation for common typos (e.g., ".con" instead of ".com")
+- Inconsistent behavior across authentication endpoints
 
 #### Fix
-[To be documented]
+Applied consistent email normalization to the login endpoint to match signup behavior:
+
+**Backend Change** ([server/routers/auth.ts:157](server/routers/auth.ts#L157)):
+```typescript
+// Changed from:
+email: z.string().email()
+
+// To:
+email: z.string().email().toLowerCase()
+```
+
+This ensures both signup and login normalize emails consistently, allowing case-insensitive authentication.
+
+#### Test Results
+All 34 email validation tests passing:
+```
+✅ Case Sensitivity Handling: 4/4 passing
+✅ Authentication Flow: 3/3 passing
+✅ Email Validation Rules: 3/3 passing
+✅ User Experience: 3/3 passing
+✅ Edge Cases: 4/4 passing
+✅ Database Consistency: 3/3 passing
+✅ Security Considerations: 2/2 passing
+✅ Query Structure Validation: 3/3 passing
+✅ Integration Scenarios: 3/3 passing
+✅ Solution Validation: 6/6 passing
+```
+
+Test file: `__tests__/api/emailValidation.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 34 unit tests covering case sensitivity, authentication flow, and edge cases
+2. **Consistent Validation**: Both signup and login now use identical email normalization
+3. **Backward Compatibility**: Users already using lowercase emails are unaffected
+4. **Clear Test Documentation**: Test file includes detailed comments about the bug and fix
+5. **Future Considerations**: Consider adding user feedback when email is normalized and validation for common typos
 
 ---
 
@@ -873,12 +919,12 @@ Created comprehensive test suite with 40 tests covering all scenarios:
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 8
-- **Not Fixed**: 17
+- **Fixed**: 9
+- **Not Fixed**: 16
 
 ### By Priority
 - **Critical**: 8/8 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405, PERF-406)
-- **High**: 0/8 fixed
+- **High**: 1/9 fixed (VAL-201)
 - **Medium**: 0/9 fixed
 
 ---
