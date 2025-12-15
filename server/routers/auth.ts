@@ -16,7 +16,40 @@ export const authRouter = router({
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
-        dateOfBirth: z.string(),
+        dateOfBirth: z.string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format")
+          .refine((date) => {
+            const parsedDate = new Date(date);
+            return !isNaN(parsedDate.getTime()) && date === parsedDate.toISOString().split('T')[0];
+          }, "Please enter a valid date of birth")
+          .refine((date) => {
+            const birthDate = new Date(date);
+            const today = new Date();
+            // First check if date is in the future
+            if (birthDate >= today) {
+              return false;
+            }
+            return true;
+          }, "Date of birth cannot be in the future")
+          .refine((date) => {
+            const birthDate = new Date(date);
+            const today = new Date();
+            // Only check age if date is not in future
+            if (birthDate >= today) {
+              return true; // Skip age check for future dates
+            }
+            const age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            const dayDiff = today.getDate() - birthDate.getDate();
+            const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+            return actualAge >= 18;
+          }, "You must be at least 18 years old")
+          .refine((date) => {
+            const birthDate = new Date(date);
+            const today = new Date();
+            const age = today.getFullYear() - birthDate.getFullYear();
+            return age <= 120;
+          }, "Please enter a valid date of birth"),
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),

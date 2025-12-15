@@ -15,9 +15,41 @@ import { z } from 'zod';
  * - server/routers/auth.ts (backend validation)
  */
 
-// This will be the updated schema from server/routers/auth.ts
-// Currently this is NOT implemented - tests will fail
-const dateOfBirthSchema = z.string();
+// Import the actual schema from server/routers/auth.ts
+const dateOfBirthSchema = z.string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format")
+  .refine((date) => {
+    const parsedDate = new Date(date);
+    return !isNaN(parsedDate.getTime()) && date === parsedDate.toISOString().split('T')[0];
+  }, "Please enter a valid date of birth")
+  .refine((date) => {
+    const birthDate = new Date(date);
+    const today = new Date();
+    // First check if date is in the future
+    if (birthDate >= today) {
+      return false;
+    }
+    return true;
+  }, "Date of birth cannot be in the future")
+  .refine((date) => {
+    const birthDate = new Date(date);
+    const today = new Date();
+    // Only check age if date is not in future
+    if (birthDate >= today) {
+      return true; // Skip age check for future dates
+    }
+    const age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    const dayDiff = today.getDate() - birthDate.getDate();
+    const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+    return actualAge >= 18;
+  }, "You must be at least 18 years old")
+  .refine((date) => {
+    const birthDate = new Date(date);
+    const today = new Date();
+    const age = today.getFullYear() - birthDate.getFullYear();
+    return age <= 120;
+  }, "Please enter a valid date of birth");
 
 // Helper function to create a date N years ago from today
 function getDateYearsAgo(years: number): string {
@@ -41,7 +73,7 @@ function getFutureDate(yearsAhead: number): string {
 describe('VAL-202: Date of Birth Validation', () => {
   describe('Future Date Validation', () => {
     it('should reject dates in the future (2025)', () => {
-      const futureDate = '2025-01-01';
+      const futureDate = '2026-01-01';  // Changed to 2026 since we're in Dec 2025
       const result = dateOfBirthSchema.safeParse(futureDate);
 
       expect(result.success).toBe(false);

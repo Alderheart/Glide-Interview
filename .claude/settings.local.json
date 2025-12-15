@@ -4,7 +4,9 @@
       "Bash(npx vitest run:*)",
       "Bash(npm install:*)",
       "Bash(npm run test:run:*)",
-      "Bash(git remote set-url:*)"
+      "Bash(git remote set-url:*)",
+      "Bash(npm test:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
