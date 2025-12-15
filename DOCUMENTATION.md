@@ -679,18 +679,59 @@ Test file: `__tests__/api/accountCreation.test.ts`
 ---
 
 ### PERF-405: Missing Transactions
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Critical
 **Reporter**: Multiple Users
 
 #### Root Cause
-[To be documented]
+The `fundAccount` mutation had a critical bug when fetching the created transaction. After inserting a new transaction, it attempted to retrieve it with:
+```typescript
+const transaction = await db.select().from(transactions).orderBy(transactions.createdAt).limit(1).get();
+```
+
+**Issues with this query:**
+1. **No WHERE clause**: Fetched from entire transactions table (all users, all accounts)
+2. **Wrong ordering**: `orderBy(createdAt)` defaults to ASC, fetching the OLDEST transaction in the database
+3. **Race condition**: In multi-user systems, could return another user's transaction
+4. **Data exposure risk**: Could potentially expose other users' transaction data
+
+**Affected Files:**
+- `server/routers/account.ts:158` - Incorrect transaction fetch query
 
 #### Fix
-[To be documented]
+Implemented proper transaction retrieval using the insert result's ID:
+
+**Backend Changes** ([server/routers/account.ts:145-159](server/routers/account.ts#L145)):
+- Modified insert to use `.returning({ id: transactions.id })` to capture the created transaction ID
+- Updated fetch query to use `where(eq(transactions.id, insertResult[0].id))` to get the exact transaction
+- This ensures the correct transaction is always returned regardless of timing or other concurrent operations
+
+**Additional Fix** ([server/routers/account.ts:162-173](server/routers/account.ts#L162)):
+- Removed incorrect balance calculation loop that was adding the amount 100 times divided by 100
+- Now correctly calculates and returns the actual new balance
+
+#### Test Results
+All 26 validation tests passing:
+```
+✅ Transaction Creation and Retrieval: 3/3 passing
+✅ Multi-User Isolation: 2/2 passing
+✅ Transaction Details Accuracy: 5/5 passing
+✅ Edge Cases: 4/4 passing
+✅ Query Structure Validation: 3/3 passing
+✅ Integration Scenarios: 2/2 passing
+✅ Data Integrity: 3/3 passing
+✅ Solution Validation: 4/4 passing
+```
+
+Test file: `__tests__/api/transactionRetrieval.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 26 unit tests covering all transaction retrieval scenarios
+2. **Use Database IDs**: Always use insert results or specific IDs rather than timestamp-based queries
+3. **Explicit Filtering**: Always include WHERE clauses to prevent cross-account data access
+4. **Race Condition Prevention**: Using exact IDs eliminates timing-based issues
+5. **Code Review Focus**: Pay special attention to database queries that should be scoped to specific users/accounts
+6. **Security Consideration**: Never query without proper filtering in multi-tenant systems
 
 ---
 
@@ -745,11 +786,11 @@ Test file: `__tests__/api/accountCreation.test.ts`
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 6
-- **Not Fixed**: 19
+- **Fixed**: 7
+- **Not Fixed**: 18
 
 ### By Priority
-- **Critical**: 6/8 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401)
+- **Critical**: 7/8 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405)
 - **High**: 0/8 fixed
 - **Medium**: 0/9 fixed
 
