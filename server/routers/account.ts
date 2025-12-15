@@ -4,6 +4,7 @@ import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
+import { luhnCheck, isAcceptedCardType } from "@/lib/validation/cardNumber";
 
 function generateAccountNumber(): string {
   return Math.floor(Math.random() * 1000000000)
@@ -82,6 +83,40 @@ export const accountRouter = router({
           type: z.enum(["card", "bank"]),
           accountNumber: z.string(),
           routingNumber: z.string().optional(),
+        }).refine((data) => {
+          // Skip card validation for bank accounts
+          if (data.type === "bank") {
+            // Just validate it's numeric for bank accounts
+            return /^\d+$/.test(data.accountNumber);
+          }
+
+          // For card accounts, validate the card number
+          const cardNumber = data.accountNumber;
+
+          // Must be only digits
+          if (!/^\d+$/.test(cardNumber)) {
+            return false;
+          }
+
+          // Check length (15 for Amex, 16 for others)
+          const length = cardNumber.length;
+          if (length !== 15 && length !== 16) {
+            return false;
+          }
+
+          // Check if accepted card type
+          if (!isAcceptedCardType(cardNumber)) {
+            return false;
+          }
+
+          // Check Luhn algorithm
+          if (!luhnCheck(cardNumber)) {
+            return false;
+          }
+
+          return true;
+        }, {
+          message: "Invalid card number. Please check and try again",
         }),
       })
     )

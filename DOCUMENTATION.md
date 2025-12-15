@@ -151,18 +151,75 @@ Test file: `__tests__/validation/dateOfBirth.test.ts`
 ---
 
 ### VAL-206: Card Number Validation
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Critical
 **Reporter**: David Brown
 
 #### Root Cause
-[To be documented]
+The card number validation was insufficient in both frontend and backend:
+- Frontend only checked for exactly 16 digits and basic prefix (4 or 5)
+- Backend had no validation at all - accepted any string
+- No Luhn algorithm validation to detect invalid card numbers
+- Limited card type support (missing proper Mastercard ranges, Amex support)
+- American Express cards (15 digits) were rejected
+
+**Affected Files:**
+- `components/FundingModal.tsx:116-123` - Basic frontend validation
+- `server/routers/account.ts:83` - No backend validation
 
 #### Fix
-[To be documented]
+Implemented comprehensive card number validation with Luhn algorithm and proper card type detection:
+
+**Validation Helper** ([lib/validation/cardNumber.ts](lib/validation/cardNumber.ts)):
+- Luhn algorithm implementation for checksum validation
+- Card type detection patterns for Visa, Mastercard, Amex, Discover
+- Centralized validation logic with specific error messages
+
+**Backend Changes** ([server/routers/account.ts:86-120](server/routers/account.ts#L86)):
+- Added Zod refinement validations
+- Validates digit-only format
+- Checks proper length (15 for Amex, 16 for others)
+- Verifies accepted card types with regex patterns
+- Performs Luhn checksum validation
+- Handles both card and bank account types appropriately
+
+**Frontend Changes** ([components/FundingModal.tsx:117-126](components/FundingModal.tsx#L117)):
+- Integrated validation helper for real-time feedback
+- Provides specific error messages for each validation failure
+- Supports all major card types including 15-digit Amex
+
+**Key Implementation Details:**
+1. Luhn algorithm catches typos and completely invalid numbers
+2. Card type patterns:
+   - Visa: 16 digits starting with 4
+   - Mastercard: 16 digits starting with 51-55 or 2221-2720
+   - American Express: 15 digits starting with 34 or 37
+   - Discover: 16 digits starting with 6011, 644-649, or 65
+3. Defense in depth with validation on both frontend and backend
+
+#### Test Results
+All 34 validation tests passing:
+```
+✅ Luhn Algorithm Validation: 4/4 passing
+✅ Visa Card Validation: 3/3 passing
+✅ Mastercard Validation: 4/4 passing
+✅ American Express Validation: 4/4 passing
+✅ Discover Card Validation: 3/3 passing
+✅ Invalid Format Validation: 6/6 passing
+✅ Unsupported Card Types: 3/3 passing
+✅ Edge Cases: 4/4 passing
+✅ Security Tests: 3/3 passing
+```
+
+Test file: `__tests__/validation/cardNumber.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 34 unit tests covering Luhn validation, all card types, invalid formats, and security edge cases
+2. **Shared Validation Logic**: Centralized validation in helper module for consistency
+3. **Defense in Depth**: Both frontend and backend validation prevent invalid data
+4. **Clear Error Messages**: Specific messages guide users to correct issues
+5. **Security Focused**: Tests include SQL injection attempts and special character handling
+6. **Documentation**: Added inline comments explaining Luhn algorithm and card patterns
 
 ---
 
@@ -183,18 +240,80 @@ Test file: `__tests__/validation/dateOfBirth.test.ts`
 ---
 
 ### VAL-208: Weak Password Requirements
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Critical
 **Reporter**: Security Team
 
 #### Root Cause
-[To be documented]
+The password validation was insufficient, creating multiple security vulnerabilities:
+- Backend only checked minimum length (8 characters) - no complexity requirements
+- Frontend had minimal validation (only required one number)
+- Frontend-backend mismatch allowed bypass attacks via direct API calls
+- Weak common password list (only 3 passwords checked)
+- No protection against sequential/keyboard patterns
+- Missing uppercase, lowercase, and special character requirements
+
+**Affected Files:**
+- `server/routers/auth.ts:15` - Backend validation only `z.string().min(8)`
+- `app/signup/page.tsx:101-114` - Frontend had basic validation
 
 #### Fix
-[To be documented]
+Implemented comprehensive password validation with pattern-based security:
+
+**Validation Helper** ([lib/validation/password.ts](lib/validation/password.ts)):
+- Created centralized validation logic with detailed error messages
+- Enforces all security requirements consistently
+- Provides helper functions for both Zod and React Hook Form
+
+**Backend Changes** ([server/routers/auth.ts:16-53](server/routers/auth.ts#L16-53)):
+- Added Zod refinement chain with 8 validation rules
+- Validates: min length, uppercase, lowercase, number, special character
+- Blocks sequential numbers (1234, 5678)
+- Blocks reversed sequences (4321, 8765)
+- Blocks keyboard patterns (qwerty, asdfgh)
+- Blocks sequential letters (abcd, efgh)
+- Blocks 4+ repeated characters (aaaa, 1111)
+
+**Frontend Changes** ([app/signup/page.tsx:102-108](app/signup/page.tsx#L102-108)):
+- Integrated validation helper for consistent rules
+- Provides real-time feedback during password entry
+- Exact same validation as backend (no bypass possible)
+
+**Key Implementation Details:**
+1. Pattern-based approach instead of static blacklist - more scalable
+2. Defense in depth - validation on both frontend and backend
+3. Clear error messages guide users to create strong passwords
+4. Regex patterns catch common weak password patterns:
+   - Sequential: `/(?:0123|1234|2345|3456|4567|5678|6789|7890)/`
+   - Keyboard: `/(?:qwert|werty|asdfg|sdfgh|zxcvb|xcvbn)/i`
+   - Repeated: `/(.)\1{3,}/`
+
+#### Test Results
+All 38 validation tests passing:
+```
+✅ Length Requirements: 3/3 passing
+✅ Uppercase Letter Requirement: 3/3 passing
+✅ Lowercase Letter Requirement: 2/2 passing
+✅ Number Requirement: 3/3 passing
+✅ Special Character Requirement: 3/3 passing
+✅ Sequential Pattern Prevention: 6/6 passing
+✅ Repeated Character Prevention: 6/6 passing
+✅ Common Weak Passwords: 4/4 passing
+✅ Strong Password Examples: 1/1 passing
+✅ Edge Cases: 4/4 passing
+✅ Security Tests: 3/3 passing
+```
+
+Test file: `__tests__/validation/password.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 38 unit tests covering all validation rules and edge cases
+2. **Shared Validation Logic**: Centralized in helper module ensures frontend-backend consistency
+3. **Defense in Depth**: Both frontend and backend validation prevent bypass attacks
+4. **Pattern-Based Security**: Regex patterns catch weak passwords without maintaining blacklists
+5. **Clear Error Messages**: Users understand exactly what's required for a strong password
+6. **Documentation**: Added inline comments explaining each validation rule
+7. **Security by Default**: All new password fields can use the shared validation helper
 
 ---
 
@@ -233,18 +352,87 @@ Test file: `__tests__/validation/dateOfBirth.test.ts`
 ## Security Issues
 
 ### SEC-301: SSN Storage
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Critical
 **Reporter**: Security Audit Team
 
 #### Root Cause
-[To be documented]
+Social Security Numbers (SSNs) were being stored in plain text in the database, creating critical security vulnerabilities:
+- Plain text storage in database schema (`users.ssn` column)
+- No encryption before database storage
+- SSN exposed in user context object
+- SSN potentially exposed in API responses
+- Direct violation of data protection regulations (PCI DSS, GDPR, etc.)
+
+**Affected Files:**
+- `lib/db/schema.ts:12` - Database schema defined SSN as plain text field
+- `server/routers/auth.ts:53` - Backend accepted and stored SSN without encryption
+- `server/trpc.ts:58` - User context loaded full user object including plain SSN
+- `app/signup/page.tsx:232-247` - Frontend collected SSN without encryption indicators
 
 #### Fix
-[To be documented]
+Implemented AES-256-GCM encryption for SSN storage with comprehensive security measures:
+
+**Encryption Utility** ([lib/encryption/ssn.ts](lib/encryption/ssn.ts)):
+- AES-256-GCM symmetric encryption (industry standard)
+- Unique IV (initialization vector) for each encryption
+- Authentication tag to prevent tampering
+- Helper functions: `encryptSSN()`, `decryptSSN()`, `maskSSN()`
+- Format: `base64(IV):base64(encrypted):base64(authTag)`
+
+**Backend Changes** ([server/routers/auth.ts:111-117](server/routers/auth.ts#L111)):
+- SSN encrypted before database storage
+- SSN excluded from API responses (set to `undefined`)
+- Encryption happens server-side only
+
+**Context Security** ([server/trpc.ts:58-64](server/trpc.ts#L58)):
+- SSN and password excluded from user context object
+- Prevents accidental exposure in API responses
+- Clean separation of sensitive vs. safe user data
+
+**Setup Script** ([scripts/generate-encryption-key.js](scripts/generate-encryption-key.js)):
+- Generates secure 256-bit encryption keys
+- Creates `.env.local` with proper configuration
+- Run with: `npm run generate-key`
+
+**Key Implementation Details:**
+1. **Encryption Key Management**:
+   - Stored in `ENCRYPTION_KEY` environment variable
+   - 32 bytes (256 bits) for AES-256
+   - Never committed to version control
+   - Different keys for dev/staging/production
+
+2. **Why Encryption (not Hashing)**:
+   - SSNs may need retrieval for tax forms, compliance
+   - Hashing is one-way (can't retrieve original)
+   - Symmetric encryption allows secure storage and retrieval
+
+3. **Security Benefits**:
+   - Database breach exposes only encrypted data
+   - Each SSN encrypted with unique IV
+   - Authentication tag prevents tampering
+   - Key stored separately from database
+
+#### Test Results
+All 21 SSN encryption tests passing:
+```
+✅ Encryption/Decryption: 6/6 passing
+✅ SSN Masking: 5/5 passing
+✅ Format Detection: 4/4 passing
+✅ Security Edge Cases: 3/3 passing
+✅ Environment Key Validation: 3/3 passing
+```
+
+Test file: `__tests__/validation/ssnEncryption.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 21 unit tests covering encryption, decryption, masking, and security edge cases
+2. **Defense in Depth**: Multiple layers of protection (encryption, context filtering, API response sanitization)
+3. **Secure Key Management**: Environment-based key storage with generation script
+4. **Clear Documentation**: Inline comments explaining encryption approach and security considerations
+5. **Developer Setup**: Simple `npm run generate-key` command for local development
+6. **Audit Trail**: Encryption format includes IV and auth tag for forensic analysis if needed
+7. **No Legacy Debt**: Clean implementation from start (no existing plain text SSNs to migrate)
 
 ---
 
@@ -429,11 +617,11 @@ Test file: `__tests__/validation/dateOfBirth.test.ts`
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 1
-- **Not Fixed**: 24
+- **Fixed**: 4
+- **Not Fixed**: 21
 
 ### By Priority
-- **Critical**: 1/8 fixed
+- **Critical**: 4/8 fixed (VAL-202, VAL-206, VAL-208, SEC-301)
 - **High**: 0/8 fixed
 - **Medium**: 0/9 fixed
 

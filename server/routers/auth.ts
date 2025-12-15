@@ -6,13 +6,52 @@ import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { encryptSSN } from "@/lib/encryption/ssn";
+import { validatePassword } from "@/lib/validation/password";
 
 export const authRouter = router({
   signup: publicProcedure
     .input(
       z.object({
         email: z.string().email().toLowerCase(),
-        password: z.string().min(8),
+        password: z.string()
+          .min(8, "Password must be at least 8 characters")
+          .refine((password) => /[A-Z]/.test(password), "Password must contain at least one uppercase letter")
+          .refine((password) => /[a-z]/.test(password), "Password must contain at least one lowercase letter")
+          .refine((password) => /[0-9]/.test(password), "Password must contain at least one number")
+          .refine((password) => /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password), "Password must contain at least one special character")
+          .refine((password) => {
+            // Check for sequential numbers
+            const sequentialNumbers = /(?:0123|1234|2345|3456|4567|5678|6789|7890)/;
+            const reversedNumbers = /(?:3210|4321|5432|6543|7654|8765|9876|0987)/;
+            return !sequentialNumbers.test(password) && !reversedNumbers.test(password);
+          }, "Password cannot contain sequential patterns")
+          .refine((password) => {
+            // Check for keyboard patterns
+            const keyboardPatterns = /(?:qwert|werty|asdfg|sdfgh|zxcvb|xcvbn)/i;
+            return !keyboardPatterns.test(password);
+          }, "Password cannot contain sequential patterns")
+          .refine((password) => {
+            // Check for sequential letters
+            const lowerPassword = password.toLowerCase();
+            for (let i = 0; i < lowerPassword.length - 3; i++) {
+              const charCode = lowerPassword.charCodeAt(i);
+              if (charCode >= 97 && charCode <= 122) {
+                if (
+                  lowerPassword.charCodeAt(i + 1) === charCode + 1 &&
+                  lowerPassword.charCodeAt(i + 2) === charCode + 2 &&
+                  lowerPassword.charCodeAt(i + 3) === charCode + 3
+                ) {
+                  return false;
+                }
+              }
+            }
+            return true;
+          }, "Password cannot contain sequential patterns")
+          .refine((password) => {
+            // Check for 4+ repeated characters
+            return !/(.)\1{3,}/.test(password);
+          }, "Password cannot contain repeated characters"),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
         phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
@@ -69,8 +108,12 @@ export const authRouter = router({
 
       const hashedPassword = await bcrypt.hash(input.password, 10);
 
+      // Encrypt the SSN before storing
+      const encryptedSSN = encryptSSN(input.ssn);
+
       await db.insert(users).values({
         ...input,
+        ssn: encryptedSSN,
         password: hashedPassword,
       });
 
@@ -105,7 +148,7 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      return { user: { ...user, password: undefined, ssn: undefined }, token };
     }),
 
   login: publicProcedure
@@ -153,7 +196,7 @@ export const authRouter = router({
         (ctx.res as Headers).set("Set-Cookie", `session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=604800`);
       }
 
-      return { user: { ...user, password: undefined }, token };
+      return { user: { ...user, password: undefined, ssn: undefined }, token };
     }),
 
   logout: publicProcedure.mutation(async ({ ctx }) => {

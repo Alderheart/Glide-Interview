@@ -6,7 +6,11 @@
       "Bash(npm run test:run:*)",
       "Bash(git remote set-url:*)",
       "Bash(npm test:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(ren:*)",
+      "Bash(mv:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npm run generate-key:*)"
     ],
     "deny": [],
     "ask": []

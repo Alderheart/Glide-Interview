@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
+import { validateCardNumber } from "@/lib/validation/cardNumber";
 
 interface FundingModalProps {
   accountId: number;
@@ -112,14 +113,16 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
             <input
               {...register("accountNumber", {
                 required: `${fundingType === "card" ? "Card" : "Account"} number is required`,
-                pattern: {
-                  value: fundingType === "card" ? /^\d{16}$/ : /^\d+$/,
-                  message: fundingType === "card" ? "Card number must be 16 digits" : "Invalid account number",
-                },
                 validate: {
-                  validCard: (value) => {
-                    if (fundingType !== "card") return true;
-                    return value.startsWith("4") || value.startsWith("5") || "Invalid card number";
+                  validFormat: (value) => {
+                    if (fundingType === "bank") {
+                      // For bank accounts, just validate it's numeric
+                      return /^\d+$/.test(value) || "Account number must contain only digits";
+                    }
+
+                    // For card accounts, use comprehensive validation
+                    const validation = validateCardNumber(value);
+                    return validation.valid || validation.error || "Invalid card number";
                   },
                 },
               })}

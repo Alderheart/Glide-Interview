@@ -1,5 +1,8 @@
 # SecureBank - Bug Fix Challenge Context
 
+### ⚠️ IMPORTANT: Do not use workarounds or shortcuts to solve issues
+It is very important that you do not use shortcuts or workarounds to quickly solve an issue. Solve issues with best practices, completely and holistically. Do not cheat.
+
 ## Project Overview
 NextJS TypeScript banking application with reported bugs to investigate and fix within 24 hours.
 
@@ -65,7 +68,6 @@ The PostCSS config has an issue that blocks Vitest. To run tests:
 ## Project Documentation Files
 - **CHALLENGE.md** - Original bug challenge details
 - **DOCUMENTATION.md** - Bug fix tracking and documentation
-- **MEMORY.md** - Cross-session notes and discoveries
 - **.claude/context.md** - This file (quick reference)
 
 ## Key Files to Investigate
