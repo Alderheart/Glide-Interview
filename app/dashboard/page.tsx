@@ -17,8 +17,21 @@ export default function DashboardPage() {
   const logoutMutation = trpc.auth.logout.useMutation();
 
   const handleLogout = async () => {
-    await logoutMutation.mutateAsync();
-    router.push("/");
+    try {
+      const result = await logoutMutation.mutateAsync();
+      if (result.success) {
+        router.push("/");
+      } else {
+        // Handle unsuccessful logout
+        console.error("Logout failed:", result.message, "Code:", result.code);
+        // Still redirect to home page for security, but log the issue
+        router.push("/");
+      }
+    } catch (error) {
+      console.error("Logout error:", error);
+      // On error, still try to redirect to login
+      router.push("/");
+    }
   };
 
   const formatCurrency = (amount: number) => {

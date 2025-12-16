@@ -219,8 +219,24 @@ export const authRouter = router({
     }),
 
   logout: publicProcedure.mutation(async ({ ctx }) => {
-    if (ctx.user) {
-      // Delete session from database
+    // Check if user is authenticated
+    if (!ctx.user) {
+      // Still clear cookie for cleanup
+      if ("setHeader" in ctx.res) {
+        ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+      } else {
+        (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+      }
+
+      return {
+        success: false,
+        message: "No active session to logout from",
+        code: "NO_SESSION"
+      };
+    }
+
+    try {
+      // Get token from request
       let token: string | undefined;
       if ("cookies" in ctx.req) {
         token = (ctx.req as any).cookies.session;
@@ -231,18 +247,97 @@ export const authRouter = router({
           .find((c: string) => c.startsWith("session="))
           ?.split("=")[1];
       }
-      if (token) {
-        await db.delete(sessions).where(eq(sessions.token, token));
+
+      if (!token) {
+        // Clear cookie anyway for cleanup
+        if ("setHeader" in ctx.res) {
+          ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+        } else {
+          (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+        }
+
+        return {
+          success: false,
+          message: "No session token found",
+          code: "NO_TOKEN"
+        };
       }
-    }
 
-    if ("setHeader" in ctx.res) {
-      ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
-    } else {
-      (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
-    }
+      // Verify session exists before deletion
+      const existingSession = await db.select()
+        .from(sessions)
+        .where(eq(sessions.token, token))
+        .get();
 
-    return { success: true, message: ctx.user ? "Logged out successfully" : "No active session" };
+      if (!existingSession) {
+        // Session already deleted or never existed
+        // Still clear cookie for cleanup
+        if ("setHeader" in ctx.res) {
+          ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+        } else {
+          (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+        }
+
+        return {
+          success: false,
+          message: "Session not found in database",
+          code: "SESSION_NOT_FOUND"
+        };
+      }
+
+      // Delete the session
+      await db.delete(sessions).where(eq(sessions.token, token));
+
+      // Verify deletion by checking if it's gone
+      const verifyDeleted = await db.select()
+        .from(sessions)
+        .where(eq(sessions.token, token))
+        .get();
+
+      if (verifyDeleted) {
+        // Deletion failed but still clear cookie for security
+        if ("setHeader" in ctx.res) {
+          ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+        } else {
+          (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+        }
+
+        return {
+          success: false,
+          message: "Failed to delete session",
+          code: "DELETE_FAILED"
+        };
+      }
+
+      // Clear the cookie on success
+      if ("setHeader" in ctx.res) {
+        ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+      } else {
+        (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+      }
+
+      return {
+        success: true,
+        message: "Logged out successfully",
+        code: "SUCCESS"
+      };
+
+    } catch (error) {
+      console.error("Logout error:", error);
+
+      // Still try to clear cookie on error
+      if ("setHeader" in ctx.res) {
+        ctx.res.setHeader("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+      } else {
+        (ctx.res as Headers).set("Set-Cookie", `session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`);
+      }
+
+      return {
+        success: false,
+        message: "An error occurred during logout",
+        code: "INTERNAL_ERROR"
+      };
+    }
   }),
 
   // New endpoint to logout from all devices
