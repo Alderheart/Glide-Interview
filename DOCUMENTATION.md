@@ -181,18 +181,91 @@ Test file: `__tests__/validation/dateOfBirth.test.ts`
 ---
 
 ### VAL-205: Zero Amount Funding
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: High
 **Reporter**: Lisa Johnson
 
 #### Root Cause
-[To be documented]
+The system allowed users to submit funding requests with $0.00 amounts, creating unnecessary transaction records. This bug resulted from a validation mismatch between frontend and backend:
+
+**Frontend Issue** ([components/FundingModal.tsx:78-81](components/FundingModal.tsx#L78)):
+- The `min` validation was set to `0.0`, which allows zero as a valid value
+- Error message claimed "Amount must be at least $0.01" but actual validation allowed `0.0`
+- This contradictory validation confused users and allowed invalid submissions
+
+**Backend Issue** ([server/routers/account.ts:78](server/routers/account.ts#L78)):
+- Used `z.number().positive()` which technically rejects zero
+- However, lacked an explicit minimum value with clear error messaging
+- Generic `.positive()` error message was less helpful for users
+
+**Impact:**
+- Users could create $0.00 funding transactions
+- Unnecessary transaction records cluttered the database
+- Transaction history included meaningless zero-amount entries
+- Potential confusion when reviewing account activity
+
+**Affected Files:**
+- `components/FundingModal.tsx:78-81` - Frontend validation allowed zero
+- `server/routers/account.ts:78` - Backend validation lacked explicit minimum
 
 #### Fix
-[To be documented]
+Implemented proper minimum amount validation on both frontend and backend to enforce $0.01 minimum:
+
+**Frontend Changes** ([components/FundingModal.tsx:79](components/FundingModal.tsx#L79)):
+Changed the minimum validation value from `0.0` to `0.01`:
+```typescript
+min: {
+  value: 0.01,  // Changed from 0.0
+  message: "Amount must be at least $0.01",
+}
+```
+
+**Backend Changes** ([server/routers/account.ts:78](server/routers/account.ts#L78)):
+Enhanced validation with explicit minimum and clear error message:
+```typescript
+amount: z.number().min(0.01, "Amount must be at least $0.01")
+```
+
+**Key Implementation Details:**
+1. Frontend now validates minimum $0.01 before submission
+2. Backend provides defense-in-depth with same validation
+3. Consistent error message across both layers
+4. Prevents sub-penny amounts (0.001, 0.005, etc.)
+5. Works for both card and bank funding types
+
+#### Test Results
+All 17 validation tests passing:
+```
+✅ Backend Validation: 4/4 passing
+✅ Minimum Valid Amount: 3/3 passing
+✅ Transaction Record Prevention: 2/2 passing
+✅ Edge Cases: 3/3 passing
+✅ Data Integrity: 2/2 passing
+✅ Error Messages: 1/1 passing
+✅ Boundary Testing: 2/2 passing
+```
+
+Test file: `__tests__/api/zeroAmountFunding.test.ts`
+
+**Test Coverage:**
+- Zero amount rejection ($0.00, $0)
+- Negative amount rejection (-$10.50, -$0.01)
+- Sub-penny amount rejection (0.001, 0.005, 0.009)
+- Minimum valid amount acceptance ($0.01)
+- Common amounts ($0.50, $1.00, $10.00, $100.00, $1000.00)
+- Transaction record prevention
+- Balance calculation accuracy
+- Both card and bank funding types
+- Clear error messaging
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 17 unit tests covering zero amounts, negative amounts, sub-penny values, and boundary cases
+2. **Defense in Depth**: Both frontend and backend enforce the same $0.01 minimum
+3. **Consistent Validation**: Same validation rule and error message on both layers
+4. **Clear Error Messages**: Users understand exactly what minimum amount is required
+5. **Financial Accuracy**: Prevents meaningless $0.00 transactions from cluttering records
+6. **Data Integrity**: Maintains clean transaction history without zero-amount entries
+7. **Boundary Testing**: Validates behavior at critical thresholds (0, 0.01, sub-penny amounts)
 
 ---
 
@@ -996,12 +1069,12 @@ Test file: `__tests__/performance/resourceLeak.test.ts`
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 10
-- **Not Fixed**: 15
+- **Fixed**: 11
+- **Not Fixed**: 14
 
 ### By Priority
 - **Critical**: 9/9 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405, PERF-406, PERF-408)
-- **High**: 1/8 fixed (VAL-201)
+- **High**: 2/8 fixed (VAL-201, VAL-205)
 - **Medium**: 0/8 fixed
 
 ---
