@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import { validateCardNumber } from "@/lib/validation/cardNumber";
+import { validateRoutingNumber } from "@/lib/validation/routingNumber";
 
 interface FundingModalProps {
   accountId: number;
@@ -139,10 +140,12 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
               <input
                 {...register("routingNumber", {
                   required: "Routing number is required",
-                  pattern: {
-                    value: /^\d{9}$/,
-                    message: "Routing number must be 9 digits",
-                  },
+                  validate: {
+                    validFormat: (value) => {
+                      const validation = validateRoutingNumber(value);
+                      return validation.valid || validation.error || "Invalid routing number";
+                    }
+                  }
                 })}
                 type="text"
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"

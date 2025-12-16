@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { luhnCheck, isAcceptedCardType } from "@/lib/validation/cardNumber";
+import { validateRoutingNumber } from "@/lib/validation/routingNumber";
 
 function generateAccountNumber(): string {
   return Math.floor(Math.random() * 1000000000)
@@ -80,6 +81,17 @@ export const accountRouter = router({
           type: z.enum(["card", "bank"]),
           accountNumber: z.string(),
           routingNumber: z.string().optional(),
+        }).refine((data) => {
+          // Validate routing number for bank transfers
+          if (data.type === "bank") {
+            const validation = validateRoutingNumber(data.routingNumber);
+            if (!validation.valid) {
+              return false;
+            }
+          }
+          return true;
+        }, {
+          message: "Routing number is required and must be a valid 9-digit ABA routing number for bank transfers",
         }).refine((data) => {
           // Skip card validation for bank accounts
           if (data.type === "bank") {

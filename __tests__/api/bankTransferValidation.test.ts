@@ -13,11 +13,11 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { appRouter } from "@/server/routers/_app";
+import { appRouter } from "@/server/routers";
 import { db } from "@/lib/db";
 import { users, accounts, transactions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { hashPassword } from "@/lib/auth";
+import bcrypt from "bcryptjs";
 
 describe("VAL-207: Routing Number Optional (Bank Transfer Validation)", () => {
   let testUserId: number;
@@ -31,7 +31,7 @@ describe("VAL-207: Routing Number Optional (Bank Transfer Validation)", () => {
     await db.delete(users).run();
 
     // Create test user
-    const hashedPassword = await hashPassword("TestPass123!");
+    const hashedPassword = await bcrypt.hash("TestPass123!", 10);
     const userResult = await db
       .insert(users)
       .values({

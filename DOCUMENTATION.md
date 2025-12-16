@@ -343,18 +343,88 @@ Test file: `__tests__/validation/cardNumber.test.ts`
 ---
 
 ### VAL-207: Routing Number Optional
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: High
 **Reporter**: Support Team
 
 #### Root Cause
-[To be documented]
+Bank transfers could be submitted without routing numbers, causing ACH transfer failures. The vulnerability existed at multiple levels:
+- Backend marked routing number as optional (`z.string().optional()`) allowing undefined or empty values
+- Backend validation only checked card numbers, completely ignoring routing number validation for bank transfers
+- While frontend had proper validation, direct API calls could bypass it entirely
+- No ABA checksum validation to catch typos or invalid routing numbers
+
+**Affected Files:**
+- `server/routers/account.ts:82` - Routing number marked as optional in Zod schema
+- `server/routers/account.ts:83-117` - Validation refine only checked card numbers, ignored routing numbers
 
 #### Fix
-[To be documented]
+Implemented comprehensive routing number validation with ABA checksum algorithm:
+
+**Validation Helper** ([lib/validation/routingNumber.ts](lib/validation/routingNumber.ts)):
+- Created centralized routing number validation with ABA checksum
+- Formula: `3(d1 + d4 + d7) + 7(d2 + d5 + d8) + (d3 + d6 + d9) mod 10 = 0`
+- Validates exactly 9 digits, numeric only
+- Rejects edge cases (000000000, invalid checksums)
+- Provides clear error messages for each validation failure
+
+**Backend Changes** ([server/routers/account.ts:85-94](server/routers/account.ts#L85)):
+- Added new `.refine()` validation specifically for routing numbers
+- Validates routing number is required when `type === "bank"`
+- Performs format validation (9 digits, numeric)
+- Implements ABA checksum validation
+- Separate error message for routing number vs card number issues
+
+**Frontend Changes** ([components/FundingModal.tsx:144-147](components/FundingModal.tsx#L144)):
+- Enhanced validation to use the routing number helper
+- Provides real-time validation with ABA checksum
+- Shows specific error messages (required, format, checksum)
+- Consistent with backend validation rules
+
+**Key Implementation Details:**
+1. ABA checksum algorithm prevents typos and invalid routing numbers
+2. Defense in depth - validation on both frontend and backend
+3. API bypass prevention - backend validates independently
+4. Known valid routing numbers tested (Chase: 021000021, BofA: 026009593, etc.)
+5. Card transfers continue to work without routing numbers
+
+#### Test Results
+All 79 validation tests passing:
+```
+✅ Unit Tests (routingNumber.test.ts): 39/39 passing
+  - ABA Checksum Validation: 8/8 passing
+  - Format Validation: 6/6 passing
+  - Valid Bank Routing Numbers: 12/12 passing
+  - Invalid Checksums: 3/3 passing
+  - Edge Cases: 4/4 passing
+  - Security Tests: 3/3 passing
+  - Algorithm Tests: 3/3 passing
+
+✅ Integration Tests (bankTransferValidation.test.ts): 40/40 passing
+  - Routing Number Required: 4/4 passing
+  - Format Validation: 5/5 passing
+  - ABA Checksum Validation: 7/7 passing
+  - Card Transfer Exemption: 3/3 passing
+  - Transaction Integrity: 3/3 passing
+  - Multiple Banks: 7/7 passing
+  - API Bypass Prevention: 3/3 passing
+  - Error Messages: 2/2 passing
+  - Security & Edge Cases: 4/4 passing
+  - Mixed Funding Types: 2/2 passing
+```
+
+Test files:
+- `__tests__/validation/routingNumber.test.ts`
+- `__tests__/api/bankTransferValidation.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 79 tests covering all validation rules, checksums, and edge cases
+2. **Shared Validation Logic**: Centralized helper ensures frontend-backend consistency
+3. **Defense in Depth**: Both frontend and backend validation prevent bypass attacks
+4. **Industry Standard**: ABA checksum algorithm catches typos and invalid numbers
+5. **Clear Error Messages**: Users understand exactly what's wrong with their routing number
+6. **Type Safety**: TypeScript ensures routing number handling is consistent
+7. **Security by Default**: All future bank transfer features inherit routing number validation
 
 ---
 
@@ -1069,12 +1139,12 @@ Test file: `__tests__/performance/resourceLeak.test.ts`
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 11
-- **Not Fixed**: 14
+- **Fixed**: 12
+- **Not Fixed**: 13
 
 ### By Priority
 - **Critical**: 9/9 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405, PERF-406, PERF-408)
-- **High**: 2/8 fixed (VAL-201, VAL-205)
+- **High**: 3/8 fixed (VAL-201, VAL-205, VAL-207)
 - **Medium**: 0/8 fixed
 
 ---

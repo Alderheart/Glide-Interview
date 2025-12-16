@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { z } from 'zod';
+import { validateRoutingNumberChecksum } from '@/lib/validation/routingNumber';
 
 /**
  * VAL-207: Routing Number Validation Tests
@@ -15,26 +16,6 @@ import { z } from 'zod';
  * - server/routers/account.ts (backend validation)
  * - components/FundingModal.tsx (frontend validation)
  */
-
-/**
- * ABA Routing Number Checksum Validation
- * Formula: 3(d1 + d4 + d7) + 7(d2 + d5 + d8) + (d3 + d6 + d9) mod 10 = 0
- */
-function validateRoutingNumberChecksum(routingNumber: string): boolean {
-  if (!/^\d{9}$/.test(routingNumber)) {
-    return false;
-  }
-
-  const digits = routingNumber.split('').map(Number);
-
-  const checksum = (
-    3 * (digits[0] + digits[3] + digits[6]) +
-    7 * (digits[1] + digits[4] + digits[7]) +
-    (digits[2] + digits[5] + digits[8])
-  ) % 10;
-
-  return checksum === 0;
-}
 
 // Routing number validation schema matching what should be in lib/validation/routingNumber.ts
 const routingNumberSchema = z.string()
