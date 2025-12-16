@@ -8,6 +8,7 @@ import { users, sessions } from "@/lib/db/schema";
 import { eq, and, lt, gt } from "drizzle-orm";
 import { encryptSSN } from "@/lib/encryption/ssn";
 import { validatePassword } from "@/lib/validation/password";
+import { validateStateCodeForZod, getStateCodeError } from "@/lib/validation/stateCode";
 
 export const authRouter = router({
   signup: publicProcedure
@@ -92,7 +93,9 @@ export const authRouter = router({
         ssn: z.string().regex(/^\d{9}$/),
         address: z.string().min(1),
         city: z.string().min(1),
-        state: z.string().length(2).toUpperCase(),
+        state: z.string().toUpperCase().refine(validateStateCodeForZod, {
+          message: getStateCodeError(),
+        }),
         zipCode: z.string().regex(/^\d{5}$/),
       })
     )

@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import Link from "next/link";
 import { validatePassword } from "@/lib/validation/password";
+import { validateStateCodeForReactHookForm } from "@/lib/validation/stateCode";
 
 type SignupFormData = {
   email: string;
@@ -273,10 +274,7 @@ export default function SignupPage() {
                   <input
                     {...register("state", {
                       required: "State is required",
-                      pattern: {
-                        value: /^[A-Z]{2}$/,
-                        message: "Use 2-letter state code",
-                      },
+                      validate: validateStateCodeForReactHookForm,
                     })}
                     type="text"
                     placeholder="CA"
