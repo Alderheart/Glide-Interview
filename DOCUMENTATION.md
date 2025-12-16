@@ -80,6 +80,7 @@ Manual testing confirms:
 **Status**: ✅ Fixed
 **Priority**: High
 **Reporter**: James Wilson
+**Manual Testing**: ✅ Done
 
 #### Root Cause
 The email validation was inconsistent between signup and login endpoints, causing authentication failures when users tried to login with mixed-case emails:
@@ -142,6 +143,7 @@ Test file: `__tests__/api/emailValidation.test.ts`
 **Status**: ✅ Fixed
 **Priority**: Critical
 **Reporter**: Maria Garcia
+**Manual Testing**: ⏳ Pending
 
 #### Root Cause
 The date of birth field had no validation beyond checking if the field was empty. Both frontend and backend accepted any string value, allowing:

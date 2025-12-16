@@ -84,6 +84,7 @@ describe("PERF-402: Logout Issues", () => {
       // Now try to logout with a token that doesn't exist in DB
       const logoutContext = {
         user: { id: signupResult.user.id }, // User context exists (from JWT validation)
+        token: signupResult.token, // Token is now in context
         req: {
           headers: {
             get: (key: string) => key === "cookie" ? `session=${signupResult.token}` : null,
@@ -165,6 +166,7 @@ describe("PERF-402: Logout Issues", () => {
 
       const logoutContext = {
         user: { id: signupResult.user.id },
+        token: signupResult.token, // Token is now in context
         req: {
           headers: {
             get: (key: string) => key === "cookie" ? `session=${signupResult.token}` : null,
@@ -267,6 +269,7 @@ describe("PERF-402: Logout Issues", () => {
       // Proper logout with correct context
       const logoutContext = {
         user: { id: signupResult.user.id },
+        token: signupResult.token, // Token is now in context
         req: {
           headers: {
             get: (key: string) => key === "cookie" ? `session=${signupResult.token}` : null,

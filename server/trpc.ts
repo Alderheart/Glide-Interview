@@ -75,6 +75,7 @@ export async function createContext(opts: CreateNextContextOptions | FetchCreate
 
   return {
     user,
+    token,
     req,
     res,
   };

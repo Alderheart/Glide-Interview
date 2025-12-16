@@ -236,17 +236,8 @@ export const authRouter = router({
     }
 
     try {
-      // Get token from request
-      let token: string | undefined;
-      if ("cookies" in ctx.req) {
-        token = (ctx.req as any).cookies.session;
-      } else {
-        const cookieHeader = ctx.req.headers.get?.("cookie") || (ctx.req.headers as any).cookie;
-        token = cookieHeader
-          ?.split("; ")
-          .find((c: string) => c.startsWith("session="))
-          ?.split("=")[1];
-      }
+      // Get token from context (already parsed in createContext)
+      const token = ctx.token;
 
       if (!token) {
         // Clear cookie anyway for cleanup
