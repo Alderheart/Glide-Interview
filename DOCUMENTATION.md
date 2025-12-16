@@ -1529,18 +1529,100 @@ Test file: `__tests__/security/sessionExpiry.test.ts`
 ---
 
 ### PERF-404: Transaction Sorting
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Medium
 **Reporter**: Jane Doe
 
 #### Root Cause
-[To be documented]
+The getTransactions endpoint in the account router was returning transactions without any explicit ordering, causing unpredictable and inconsistent display order:
+
+**Affected File:**
+- `server/routers/account.ts:223-226` - Query lacked ORDER BY clause
+
+**The Bug:**
+```typescript
+const accountTransactions = await db
+  .select()
+  .from(transactions)
+  .where(eq(transactions.accountId, input.accountId));
+// ❌ No ORDER BY clause - unpredictable order
+```
+
+**Why This Was a Problem:**
+1. **No ORDER BY clause**: Database returned results in arbitrary order (typically insertion order but not guaranteed)
+2. **Inconsistent behavior**: Same query could return different ordering due to:
+   - Database engine optimizations
+   - Index usage changes
+   - Query plan variations
+   - Table reorganization after updates/deletes
+3. **Poor UX**: Users couldn't find recent transactions easily
+4. **Confusing history**: Transaction chronology was unclear
+
+**Impact:**
+- Transaction history appeared in random/inconsistent order
+- Users confused when reviewing account activity
+- Difficult to find recent transactions
+- Same query returned different orders on different page loads
 
 #### Fix
-[To be documented]
+Implemented explicit chronological ordering with secondary sort by ID for transactions with identical timestamps:
+
+**Backend Changes** ([server/routers/account.ts](server/routers/account.ts)):
+
+1. **Import desc function** (line 6):
+```typescript
+import { eq, and, desc } from "drizzle-orm";
+```
+
+2. **Add ORDER BY clause** (lines 223-227):
+```typescript
+const accountTransactions = await db
+  .select()
+  .from(transactions)
+  .where(eq(transactions.accountId, input.accountId))
+  .orderBy(desc(transactions.createdAt), desc(transactions.id));
+```
+
+**Key Implementation Details:**
+1. **Primary sort**: `desc(transactions.createdAt)` - Newest transactions first
+2. **Secondary sort**: `desc(transactions.id)` - Handles identical timestamps by using auto-increment ID
+3. **Standard UX**: Matches banking app convention of showing recent activity at top
+4. **Consistent ordering**: Same query always returns same order
+5. **Database-level sorting**: More efficient than client-side sorting
+
+#### Test Results
+All 13 transaction sorting tests passing:
+```
+✅ Chronological Ordering: 4/4 passing
+  - Transactions returned in descending order (newest first)
+  - Consistent order across multiple queries
+  - Most recent transaction appears first
+  - Sorting by createdAt, not by ID
+✅ Edge Cases: 4/4 passing
+  - Identical timestamps handled by secondary ID sort
+  - Single transaction handled correctly
+  - Empty list handled correctly
+  - 50+ transactions sorted efficiently
+✅ Multi-Account Isolation: 2/2 passing
+  - Each account's transactions sorted independently
+  - No cross-account data leakage
+✅ Data Integrity: 2/2 passing
+  - No transactions lost or duplicated
+  - All fields preserved correctly
+✅ User Experience: 1/1 passing
+  - Latest deposits appear first as expected
+```
+
+Test file: `__tests__/performance/transactionSorting.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 13 unit tests covering chronological ordering, edge cases, and multi-account scenarios
+2. **Explicit Ordering**: Always specify ORDER BY for queries returning multiple records
+3. **Secondary Sort Keys**: Use ID as tiebreaker for identical timestamps
+4. **Database Best Practices**: Consider indexes on frequently sorted columns for performance
+5. **Code Review Focus**: Verify all list queries have appropriate ordering
+6. **Documentation**: Clear comments about expected sort order in API endpoints
+7. **Consistency**: Use same ordering pattern across all transaction-related queries
 
 ---
 
@@ -1816,13 +1898,13 @@ Test file: `__tests__/performance/resourceLeak.test.ts`
 ## Summary Statistics
 
 - **Total Issues**: 23
-- **Fixed**: 17
-- **Not Fixed**: 6
+- **Fixed**: 18
+- **Not Fixed**: 5
 
 ### By Priority
 - **Critical**: 9 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405, PERF-406, PERF-408)
-- **High**: 6 fixed (VAL-201, VAL-205, VAL-207, VAL-210, SEC-302, SEC-304, PERF-403)
-- **Medium**: 3 fixed (VAL-203, VAL-204, PERF-402); 4 not fixed (UI-101, VAL-209, PERF-404, PERF-407)
+- **High**: 7 fixed (VAL-201, VAL-205, VAL-207, VAL-210, SEC-302, SEC-304, PERF-403)
+- **Medium**: 4 fixed (VAL-203, VAL-204, PERF-402, PERF-404); 3 not fixed (UI-101, VAL-209, PERF-407)
 
 ---
 

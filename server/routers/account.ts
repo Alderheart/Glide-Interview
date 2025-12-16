@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { protectedProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { accounts, transactions } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { luhnCheck, isAcceptedCardType } from "@/lib/validation/cardNumber";
 import { validateRoutingNumber } from "@/lib/validation/routingNumber";
 import { validateAmount } from "@/lib/validation/amount";
@@ -223,7 +223,8 @@ export const accountRouter = router({
       const accountTransactions = await db
         .select()
         .from(transactions)
-        .where(eq(transactions.accountId, input.accountId));
+        .where(eq(transactions.accountId, input.accountId))
+        .orderBy(desc(transactions.createdAt), desc(transactions.id));
 
       // Add accountType to each transaction without additional queries
       // Since all transactions belong to the same account we already fetched above
