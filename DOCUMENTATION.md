@@ -740,18 +740,124 @@ Test file: `__tests__/validation/password.test.ts`
 ---
 
 ### VAL-209: Amount Input Issues
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Medium
 **Reporter**: Robert Lee
 
 #### Root Cause
-[To be documented]
+The system accepted monetary amounts with multiple leading zeros (e.g., "00100", "00.50"), causing confusion in transaction records:
+
+- Frontend regex `/^\d+\.?\d{0,2}$/` allowed any number of leading digits with no restriction on leading zeros
+- While `parseFloat()` correctly converted "00100" to 100, the original confusing input could be displayed or logged
+- No validation to reject unnecessary leading zeros in either frontend or backend
+- Lack of standardized amount format validation across the application
+
+**Affected Files:**
+- `components/FundingModal.tsx:76` - Permissive regex pattern
+- `server/routers/account.ts:78` - Only checked min/max with Zod, no format validation
+
+**Examples of the Bug:**
+- "00100" accepted → confusing display (should show "100")
+- "00.50" accepted → confusing display (should show "0.50")
+- "001" accepted → confusing display (should show "1")
 
 #### Fix
-[To be documented]
+Implemented comprehensive amount validation with proper format checking to reject unnecessary leading zeros:
+
+**Validation Helper** ([lib/validation/amount.ts](lib/validation/amount.ts)):
+- Created `validateAmount()` function with the following validations:
+  - Rejects null/undefined/empty inputs
+  - Rejects negative amounts
+  - Rejects currency symbols and comma separators
+  - **Rejects unnecessary leading zeros** (e.g., "00", "01", "00100", "00.50")
+  - Accepts valid formats: "0.50", "100", "100.50"
+  - Validates maximum 2 decimal places
+  - Enforces minimum $0.01 and maximum $10,000
+  - Returns normalized number and formatted string
+- Provides clear, specific error messages for each validation failure
+- Security checks against SQL injection, XSS, and extremely long inputs
+
+**Frontend Changes** ([components/FundingModal.tsx](components/FundingModal.tsx)):
+- Replaced permissive regex with `validateAmount()` custom validation
+- Added import: `import { validateAmount } from "@/lib/validation/amount"`
+- Updated form registration to use validation function:
+  ```typescript
+  validate: (value) => {
+    const result = validateAmount(value);
+    return result.isValid || result.error || "Invalid amount";
+  }
+  ```
+- Enhanced `onSubmit` to validate and normalize amount before submission
+- Prevents form submission with invalid amounts
+- Displays specific error messages from validation function
+
+**Backend Changes** ([server/routers/account.ts](server/routers/account.ts)):
+- Added import: `import { validateAmount } from "@/lib/validation/amount"`
+- Updated Zod schema to accept string or number and validate with custom refinement
+- Added validation in mutation handler before processing:
+  ```typescript
+  const amountValidation = validateAmount(input.amount);
+  if (!amountValidation.isValid) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: amountValidation.error || "Invalid amount",
+    });
+  }
+  const amount = amountValidation.normalized!;
+  ```
+- Ensures consistent validation between frontend and backend
+
+**Key Validation Rules:**
+1. **No leading zeros except "0.xx"**: Rejects "00", "01", "00100", "00.50"
+2. **Accepts valid formats**: "0", "0.50", "100", "100.50"
+3. **Range**: $0.01 minimum, $10,000 maximum
+4. **Decimal places**: Maximum 2 decimal places
+5. **Normalization**: Converts to proper decimal number (e.g., "10.5" → 10.50)
+6. **Error messages**: Clear, actionable messages mentioning "leading zero", "minimum", "maximum", "decimal"
+
+#### Test Results
+Created comprehensive test suite with 32 tests, all passing ✅:
+- Valid amount formats (5 tests)
+- Invalid leading zeros validation (4 tests) - **Core fix for VAL-209**
+- Invalid decimal places (2 tests)
+- Amount range validation (2 tests)
+- Invalid format validation (5 tests)
+- Edge cases (5 tests)
+- Normalization consistency (2 tests)
+- Security tests (4 tests)
+- Error message clarity (3 tests)
+
+Test file: [__tests__/validation/amountInput.test.ts](__tests__/validation/amountInput.test.ts)
+
+**Before Fix:**
+```javascript
+validateAmount('00100') // ❌ Would be parsed as 100 but displayed confusingly
+validateAmount('00.50')  // ❌ Would be parsed as 0.50 but displayed confusingly
+```
+
+**After Fix:**
+```javascript
+validateAmount('00100')
+// { isValid: false, error: "Amount should not have unnecessary leading zeros (use '0.50' instead of '00.50')" }
+
+validateAmount('00.50')
+// { isValid: false, error: "Amount should not have unnecessary leading zeros (use '0.50' instead of '00.50')" }
+
+validateAmount('100')
+// { isValid: true, normalized: 100, formatted: "100.00" }
+
+validateAmount('0.50')
+// { isValid: true, normalized: 0.5, formatted: "0.50" }
+```
 
 #### Preventive Measures
-[To be documented]
+1. **Centralized Validation**: All amount validation goes through single `validateAmount()` function
+2. **Consistent Frontend/Backend**: Same validation logic used on both client and server
+3. **Comprehensive Testing**: 32 test cases cover edge cases, security, and error messages
+4. **Clear Error Messages**: Users get specific guidance on what format is expected
+5. **Type Safety**: TypeScript interfaces ensure proper return types
+6. **Defense in Depth**: Multiple layers of validation (format, range, decimal places)
+7. **Input Normalization**: Always normalize to proper decimal format for storage/display
 
 ---
 

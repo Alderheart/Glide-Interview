@@ -6,6 +6,7 @@ import { accounts, transactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { luhnCheck, isAcceptedCardType } from "@/lib/validation/cardNumber";
 import { validateRoutingNumber } from "@/lib/validation/routingNumber";
+import { validateAmount } from "@/lib/validation/amount";
 
 function formatAccountNumber(id: number, accountType: string): string {
   const prefix = accountType === 'checking' ? '10' : '20';
@@ -75,7 +76,13 @@ export const accountRouter = router({
     .input(
       z.object({
         accountId: z.number(),
-        amount: z.number().min(0.01, "Amount must be at least $0.01"),
+        amount: z.union([z.string(), z.number()]).refine((val) => {
+          const result = validateAmount(val);
+          return result.isValid;
+        }, (val) => {
+          const result = validateAmount(val);
+          return { message: result.error || "Invalid amount" };
+        }),
         fundingSource: z.object({
           type: z.enum(["card", "bank"]),
           accountNumber: z.string(),
@@ -129,7 +136,15 @@ export const accountRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const amount = parseFloat(input.amount.toString());
+      // Validate and normalize the amount
+      const amountValidation = validateAmount(input.amount);
+      if (!amountValidation.isValid) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: amountValidation.error || "Invalid amount",
+        });
+      }
+      const amount = amountValidation.normalized!;
 
       // Verify account belongs to user
       const account = await db

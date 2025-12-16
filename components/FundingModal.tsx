@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
 import { validateCardNumber } from "@/lib/validation/cardNumber";
 import { validateRoutingNumber } from "@/lib/validation/routingNumber";
+import { validateAmount } from "@/lib/validation/amount";
 
 interface FundingModalProps {
   accountId: number;
@@ -39,11 +40,16 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
     setError("");
 
     try {
-      const amount = parseFloat(data.amount);
+      // Validate and normalize the amount
+      const amountValidation = validateAmount(data.amount);
+      if (!amountValidation.isValid) {
+        setError(amountValidation.error || "Invalid amount");
+        return;
+      }
 
       await fundAccountMutation.mutateAsync({
         accountId,
-        amount,
+        amount: amountValidation.normalized!,
         fundingSource: {
           type: data.fundingType,
           accountNumber: data.accountNumber,
@@ -72,17 +78,9 @@ export function FundingModal({ accountId, onClose, onSuccess }: FundingModalProp
               <input
                 {...register("amount", {
                   required: "Amount is required",
-                  pattern: {
-                    value: /^\d+\.?\d{0,2}$/,
-                    message: "Invalid amount format",
-                  },
-                  min: {
-                    value: 0.01,
-                    message: "Amount must be at least $0.01",
-                  },
-                  max: {
-                    value: 10000,
-                    message: "Amount cannot exceed $10,000",
+                  validate: (value) => {
+                    const result = validateAmount(value);
+                    return result.isValid || result.error || "Invalid amount";
                   },
                 })}
                 type="text"
