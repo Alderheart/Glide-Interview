@@ -7,10 +7,10 @@ import { eq, and } from "drizzle-orm";
 import { luhnCheck, isAcceptedCardType } from "@/lib/validation/cardNumber";
 import { validateRoutingNumber } from "@/lib/validation/routingNumber";
 
-function generateAccountNumber(): string {
-  return Math.floor(Math.random() * 1000000000)
-    .toString()
-    .padStart(10, "0");
+function formatAccountNumber(id: number, accountType: string): string {
+  const prefix = accountType === 'checking' ? '10' : '20';
+  const paddedId = id.toString().padStart(8, '0');
+  return `${prefix}${paddedId}`;
 }
 
 export const accountRouter = router({
@@ -35,26 +35,25 @@ export const accountRouter = router({
         });
       }
 
-      let accountNumber;
-      let isUnique = false;
-
-      // Generate unique account number
-      while (!isUnique) {
-        accountNumber = generateAccountNumber();
-        const existing = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber)).get();
-        isUnique = !existing;
-      }
-
-      await db.insert(accounts).values({
+      // Insert account first to get auto-increment ID
+      const insertResult = await db.insert(accounts).values({
         userId: ctx.user.id,
-        accountNumber: accountNumber!,
+        accountNumber: "TEMP", // temporary placeholder
         accountType: input.accountType,
         balance: 0,
         status: "active",
-      });
+      }).returning({ id: accounts.id });
+
+      const accountId = insertResult[0].id;
+      const accountNumber = formatAccountNumber(accountId, input.accountType);
+
+      // Update with formatted account number
+      await db.update(accounts)
+        .set({ accountNumber })
+        .where(eq(accounts.id, accountId));
 
       // Fetch the created account
-      const account = await db.select().from(accounts).where(eq(accounts.accountNumber, accountNumber!)).get();
+      const account = await db.select().from(accounts).where(eq(accounts.id, accountId)).get();
 
       if (!account) {
         throw new TRPCError({

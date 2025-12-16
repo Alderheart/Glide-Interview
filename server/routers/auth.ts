@@ -5,7 +5,7 @@ import { TRPCError } from "@trpc/server";
 import { publicProcedure, router } from "../trpc";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, lt, gt } from "drizzle-orm";
 import { encryptSSN } from "@/lib/encryption/ssn";
 import { validatePassword } from "@/lib/validation/password";
 
@@ -278,7 +278,7 @@ export const authRouter = router({
       .where(
         and(
           eq(sessions.userId, ctx.user.id),
-          lt(new Date().toISOString(), sessions.expiresAt)
+          gt(sessions.expiresAt, new Date().toISOString())
         )
       );
 

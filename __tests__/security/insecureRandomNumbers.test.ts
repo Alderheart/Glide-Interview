@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { db } from "@/lib/db";
-import { users, accounts } from "@/lib/db/schema";
+import { users, accounts, sessions } from "@/lib/db/schema";
 import { accountRouter } from "@/server/routers/account";
 import { authRouter } from "@/server/routers/auth";
 import { eq } from "drizzle-orm";
@@ -73,10 +73,11 @@ describe("SEC-302: Insecure Random Numbers", () => {
   };
 
   beforeEach(async () => {
-    // Clean up any existing test data (accounts first due to foreign key)
+    // Clean up any existing test data (handle foreign keys in correct order)
     const existingUser = await db.select().from(users).where(eq(users.email, testUser.email)).get();
     if (existingUser) {
       await db.delete(accounts).where(eq(accounts.userId, existingUser.id));
+      await db.delete(sessions).where(eq(sessions.userId, existingUser.id));
       await db.delete(users).where(eq(users.email, testUser.email));
     }
 
@@ -89,9 +90,10 @@ describe("SEC-302: Insecure Random Numbers", () => {
   });
 
   afterEach(async () => {
-    // Clean up after tests (accounts first due to foreign key)
+    // Clean up after tests (handle foreign keys in correct order)
     if (mockContext.user.id) {
       await db.delete(accounts).where(eq(accounts.userId, mockContext.user.id));
+      await db.delete(sessions).where(eq(sessions.userId, mockContext.user.id));
     }
     await db.delete(users).where(eq(users.email, testUser.email));
   });
@@ -120,25 +122,23 @@ describe("SEC-302: Insecure Random Numbers", () => {
       // After fix, the implementation should use crypto.randomInt()
     });
 
-    it("should enforce cryptographically secure random number generation", async () => {
-      // This test will FAIL until the fix is implemented
-      // After fix: account numbers should be generated using crypto module
+    it("should use deterministic ID-based generation (not random)", async () => {
+      // With auto-increment, account numbers are deterministic based on ID
+      // No random number generation should be used
 
       const caller = accountRouter.createCaller(mockContext);
 
-      // Spy on crypto.randomInt to verify it's being used
-      const cryptoSpy = vi.spyOn(crypto, "randomInt");
+      const account = await caller.createAccount({ accountType: "checking" });
 
-      try {
-        const account = await caller.createAccount({ accountType: "checking" });
+      // Account number should follow format: prefix (2 digits) + padded ID (8 digits)
+      expect(account.accountNumber).toMatch(/^\d{10}$/);
 
-        // EXPECTED: crypto.randomInt should be called
-        // This will FAIL with current Math.random() implementation
-        expect(cryptoSpy).toHaveBeenCalled();
-        expect(account.accountNumber).toMatch(/^\d{10}$/);
-      } finally {
-        cryptoSpy.mockRestore();
-      }
+      // Checking accounts should have prefix "10"
+      expect(account.accountNumber.startsWith("10")).toBe(true);
+
+      // The account ID should be embedded in the account number
+      const paddedId = account.id.toString().padStart(8, '0');
+      expect(account.accountNumber).toBe(`10${paddedId}`);
     });
 
     it("should NOT use Math.random() for account number generation", async () => {
@@ -225,21 +225,22 @@ describe("SEC-302: Insecure Random Numbers", () => {
       const account2 = await caller.createAccount({ accountType: "checking" });
       const account3 = await caller.createAccount({ accountType: "savings" });
 
-      // If using auto-increment, account numbers should have:
+      // With auto-increment, account numbers should have:
       // - Checking accounts: prefix "10"
       // - Savings accounts: prefix "20"
 
-      // This will FAIL with current random implementation
-      // Uncomment these assertions when implementing auto-increment solution
+      expect(account1.accountNumber.startsWith("10")).toBe(true);
+      expect(account2.accountNumber.startsWith("10")).toBe(true);
+      expect(account3.accountNumber.startsWith("20")).toBe(true);
 
-      // expect(account1.accountNumber.startsWith("10") || account1.accountNumber.startsWith("20")).toBe(true);
-      // expect(account2.accountNumber.startsWith("10")).toBe(true);
-      // expect(account3.accountNumber.startsWith("20")).toBe(true);
+      // Verify sequential nature of IDs in account numbers
+      const id1 = parseInt(account1.accountNumber.slice(2));
+      const id2 = parseInt(account2.accountNumber.slice(2));
+      const id3 = parseInt(account3.accountNumber.slice(2));
 
-      // For now, just verify they exist
-      expect(account1.accountNumber).toBeTruthy();
-      expect(account2.accountNumber).toBeTruthy();
-      expect(account3.accountNumber).toBeTruthy();
+      // IDs should be sequential (increasing)
+      expect(id2).toBeGreaterThan(id1);
+      expect(id3).toBeGreaterThan(id2);
     });
 
     it("should eliminate the need for uniqueness check loop", async () => {
