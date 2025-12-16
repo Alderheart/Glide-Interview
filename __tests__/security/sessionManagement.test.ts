@@ -1,10 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { db } from "@/lib/db";
 import { users, sessions } from "@/lib/db/schema";
 import { authRouter } from "@/server/routers/auth";
 import { eq, and, lt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+
+// Set encryption key for testing (64 hex characters for 32 bytes)
+process.env.ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 describe("SEC-304: Session Management Security", () => {
   const mockContext = {

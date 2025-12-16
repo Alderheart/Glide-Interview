@@ -37,7 +37,8 @@ export const CARD_PATTERNS = {
   visa: /^4\d{15}$/,
   mastercard: /^(5[1-5]\d{14}|2(22[1-9]|2[3-9]\d|[3-6]\d{2}|7[01]\d|720)\d{12})$/,
   amex: /^3[47]\d{13}$/,
-  discover: /^(6011\d{12}|(644|645|646|647|648|649)\d{13}|65\d{14})$/,
+  // Updated to include UnionPay co-branded (622126-622925) and additional ranges (6282-6288)
+  discover: /^(6011\d{12}|(644|645|646|647|648|649)\d{13}|65\d{14}|622(12[6-9]|1[3-9]\d|[2-8]\d{2}|9[01]\d|92[0-5])\d{10}|628[2-8]\d{12})$/,
 };
 
 /**
@@ -91,7 +92,7 @@ export function validateCardNumber(cardNumber: string): { valid: boolean; error?
 
   // Check if accepted card type
   if (!isAcceptedCardType(cleaned)) {
-    return { valid: false, error: 'Invalid card number format. We accept Visa, Mastercard, American Express, and Discover' };
+    return { valid: false, error: 'We accept Visa, Mastercard, American Express, and Discover cards' };
   }
 
   // Check Luhn algorithm

@@ -523,18 +523,69 @@ Test file: `__tests__/validation/password.test.ts`
 ---
 
 ### VAL-210: Card Type Detection
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: High
 **Reporter**: Support Team
 
 #### Root Cause
-[To be documented]
+The Discover card validation regex pattern was incomplete, causing legitimate cards to be rejected. The validation was missing two important ranges of valid Discover card numbers:
+
+1. **UnionPay co-branded Discover cards (622126-622925)**: This range includes 800 different BIN (Bank Identification Number) prefixes commonly used for cards issued internationally, particularly in Asia. These are dual-branded cards that work on both the Discover and UnionPay networks.
+
+2. **Additional Discover ranges (6282-6288)**: These are newer Discover card BIN ranges that were not included in the original validation pattern.
+
+**Affected Files:**
+- `lib/validation/cardNumber.ts:40` - Incomplete Discover regex pattern
+
+**Original Pattern:**
+```regex
+/^(6011\d{12}|(644|645|646|647|648|649)\d{13}|65\d{14})$/
+```
+
+This pattern only accepted:
+- 6011 prefix (original Discover range)
+- 644-649 range
+- 65 prefix
 
 #### Fix
-[To be documented]
+Updated the Discover card validation pattern to include all valid ranges and improved the error message for clarity:
+
+**Updated Pattern** ([lib/validation/cardNumber.ts:41](lib/validation/cardNumber.ts#L41)):
+```regex
+/^(6011\d{12}|(644|645|646|647|648|649)\d{13}|65\d{14}|622(12[6-9]|1[3-9]\d|[2-8]\d{2}|9[01]\d|92[0-5])\d{10}|628[2-8]\d{12})$/
+```
+
+**Error Message Update** ([lib/validation/cardNumber.ts:95](lib/validation/cardNumber.ts#L95)):
+- Changed from: "Invalid card number format. We accept Visa, Mastercard, American Express, and Discover"
+- Changed to: "We accept Visa, Mastercard, American Express, and Discover cards"
+
+**Key Implementation Details:**
+1. The regex now accepts all valid Discover ranges while maintaining US market focus
+2. No changes needed in frontend or backend routers - they automatically inherit the fix via the shared validation helper
+3. The fix is additive only - no previously accepted cards are rejected
+4. Clear messaging helps users understand which card types are accepted
+
+#### Test Results
+All 20 validation tests passing:
+```
+✅ UnionPay Co-branded Range: 4/4 passing
+✅ Additional Discover Ranges (6282-6288): 4/4 passing
+✅ Regex Pattern Validation: 1/1 passing
+✅ Existing Card Types: 4/4 passing (Visa, Mastercard, Amex, original Discover)
+✅ Clear Error Messages: 3/3 passing
+✅ Edge Cases: 3/3 passing
+✅ Integration Tests: 1/1 passing
+```
+
+Test file: `__tests__/validation/cardTypeDetection.test.ts`
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 20 unit tests covering all Discover ranges, edge cases, and error messages
+2. **US Market Focus**: Solution focused on the four major US card networks rather than trying to support all international cards
+3. **Centralized Validation**: Single source of truth in the validation helper ensures consistency
+4. **Clear Documentation**: Added inline comments explaining the expanded Discover ranges
+5. **Boundary Testing**: Tests verify cards just outside the valid ranges are properly rejected
+6. **Regular Updates**: Card network BIN ranges should be reviewed periodically as issuers add new ranges
 
 ---
 
@@ -1139,12 +1190,12 @@ Test file: `__tests__/performance/resourceLeak.test.ts`
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 12
-- **Not Fixed**: 13
+- **Fixed**: 13
+- **Not Fixed**: 12
 
 ### By Priority
 - **Critical**: 9/9 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405, PERF-406, PERF-408)
-- **High**: 3/8 fixed (VAL-201, VAL-205, VAL-207)
+- **High**: 4/8 fixed (VAL-201, VAL-205, VAL-207, VAL-210)
 - **Medium**: 0/8 fixed
 
 ---
