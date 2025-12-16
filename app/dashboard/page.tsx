@@ -20,6 +20,8 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     try {
       const result = await logoutMutation.mutateAsync();
+      // Clear all cached data to prevent showing stale data on next login
+      await utils.invalidate();
       if (result.success) {
         router.push("/");
       } else {
@@ -30,6 +32,8 @@ export default function DashboardPage() {
       }
     } catch (error) {
       console.error("Logout error:", error);
+      // Clear cache even on error to prevent data leakage
+      await utils.invalidate();
       // On error, still try to redirect to login
       router.push("/");
     }

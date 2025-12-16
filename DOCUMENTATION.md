@@ -9,6 +9,7 @@ This document tracks all reported bugs, their root causes, fixes, and preventive
 
 ### UI-101: Dark Mode Text Visibility
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: Medium
 **Reporter**: Sarah Chen
 
@@ -744,7 +745,7 @@ Test files:
 
 ### VAL-208: Weak Password Requirements
 **Status**: ✅ Fixed
-**Manual Testing**: ⏳ Pending
+**Manual Testing**: ✅ Done
 **Priority**: Critical
 **Reporter**: Security Team
 
@@ -823,6 +824,7 @@ Test file: `__tests__/validation/password.test.ts`
 
 ### VAL-209: Amount Input Issues
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: Medium
 **Reporter**: Robert Lee
 
@@ -945,6 +947,7 @@ validateAmount('0.50')
 
 ### VAL-210: Card Type Detection
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: High
 **Reporter**: Support Team
 

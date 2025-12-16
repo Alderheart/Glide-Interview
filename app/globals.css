@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@variant dark (@media (prefers-color-scheme: dark));
+@variant dark (&:is(.dark *));
 
 :root {
   --background: #ffffff;
