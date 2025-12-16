@@ -10,7 +10,8 @@
       "Bash(ren:*)",
       "Bash(mv:*)",
       "Bash(npm run dev:*)",
-      "Bash(npm run generate-key:*)"
+      "Bash(npm run generate-key:*)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

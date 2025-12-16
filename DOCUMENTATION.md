@@ -901,31 +901,108 @@ Created comprehensive test suite with 40 tests covering all scenarios:
 ---
 
 ### PERF-408: Resource Leak
-**Status**: ❌ Not Fixed
+**Status**: ✅ Fixed
 **Priority**: Critical
 **Reporter**: System Monitoring
 
 #### Root Cause
-[To be documented]
+The application had critical resource leaks causing system resource exhaustion:
+
+**Primary Issue - Database Connection Leak:**
+- Every time `lib/db/index.ts` was imported, a new database connection was created
+- The `initDb()` function (line 12-63) created a new SQLite connection and pushed it to a `connections` array
+- This function was called on module initialization (line 66: `initDb()`)
+- Connections were never closed, accumulating indefinitely
+- In Next.js development mode with HMR (Hot Module Replacement), modules can be re-imported, multiplying the leak
+- Each connection consumed memory and file descriptors
+
+**Secondary Issue - N+1 Query Problem:**
+- The `getTransactions` endpoint in `server/routers/account.ts` had a performance issue
+- After fetching all transactions (1 query), it looped through each transaction and made an additional database query (N queries)
+- For 100 transactions, this resulted in 101 database queries instead of 2
+- All queries fetched the same account repeatedly
+- This kept database connections busy longer, contributing to connection pool exhaustion
+
+**Affected Files:**
+- `lib/db/index.ts:10-14, 66` - Connection leak from `initDb()` and `connections` array
+- `server/routers/account.ts:203-210` - N+1 query problem in transaction enrichment
+
+**Impact:**
+- Memory leak from accumulating connections
+- File descriptor exhaustion (SQLite holds file handles)
+- System resource depletion over time
+- Performance degradation under load
+- Potential application crashes when OS limits reached
 
 #### Fix
-[To be documented]
+Implemented proper database connection management and query optimization:
+
+**Database Connection Fix** ([lib/db/index.ts](lib/db/index.ts)):
+- Removed the `connections` array that accumulated leaked connections
+- Removed the `initDb()` function that created new connections
+- Now uses single database connection instance created once (`sqlite` on line 7)
+- Moved table creation to module scope with idempotent `CREATE TABLE IF NOT EXISTS`
+- Added graceful shutdown handlers:
+  - `SIGINT` handler - closes connection on Ctrl+C
+  - `SIGTERM` handler - closes connection on process termination
+  - `uncaughtException` handler - closes connection before crash
+
+**N+1 Query Optimization** ([server/routers/account.ts:197-209](server/routers/account.ts#L197)):
+- Eliminated the `for` loop with `await` inside that made N additional queries
+- Changed to `.map()` to enrich transactions with already-fetched account data
+- Reuses the `account` object fetched during authorization (line 184-188)
+- Reduced queries from N+1 to just 2 (verify account + fetch transactions)
+
+**Key Implementation Details:**
+1. **Single Connection Pattern**: One connection for the entire application lifecycle
+2. **Idempotent Initialization**: `CREATE TABLE IF NOT EXISTS` safe for module re-imports
+3. **Graceful Shutdown**: Proper cleanup prevents orphaned connections
+4. **Query Reuse**: Leverages already-fetched data instead of redundant queries
+
+#### Test Results
+All 7 resource leak tests passing:
+```
+✓ PERF-408: Resource Leak Tests
+  ✓ Database Connection Management (4/4 passing)
+    ✓ should create only one database connection on module import
+    ✓ should not have the initDb function anymore
+    ✓ should initialize tables with CREATE TABLE IF NOT EXISTS
+    ✓ should register process event handlers for graceful shutdown
+  ✓ N+1 Query Prevention (1/1 passing)
+    ✓ getTransactions should not make N+1 queries
+  ✓ Memory Leak Prevention (2/2 passing)
+    ✓ should not accumulate database connections in a global array
+    ✓ should handle multiple imports without creating multiple connections
+```
+
+Test file: `__tests__/performance/resourceLeak.test.ts`
+
+**Performance Impact:**
+- Before: Each module import created new connection; 101 queries for 100 transactions
+- After: Single reused connection; 2 queries regardless of transaction count
+- Query reduction: ~98% improvement for transaction retrieval with 100 transactions
 
 #### Preventive Measures
-[To be documented]
+1. **Comprehensive Test Suite**: Created 7 unit tests covering connection management, N+1 prevention, and memory leaks
+2. **Single Connection Pattern**: Established pattern for SQLite in Next.js applications
+3. **Graceful Shutdown**: Process handlers ensure clean resource cleanup
+4. **Query Auditing**: Identified and fixed N+1 query anti-pattern
+5. **Documentation**: Added inline comments explaining connection management approach
+6. **Module-Level Initialization**: Table creation happens once at module load, not per function call
+7. **Code Review Pattern**: Future database connection code should verify single-instance pattern
 
 ---
 
 ## Summary Statistics
 
 - **Total Issues**: 25
-- **Fixed**: 9
-- **Not Fixed**: 16
+- **Fixed**: 10
+- **Not Fixed**: 15
 
 ### By Priority
-- **Critical**: 8/8 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405, PERF-406)
-- **High**: 1/9 fixed (VAL-201)
-- **Medium**: 0/9 fixed
+- **Critical**: 9/9 fixed (VAL-202, VAL-206, VAL-208, SEC-301, SEC-303, PERF-401, PERF-405, PERF-406, PERF-408)
+- **High**: 1/8 fixed (VAL-201)
+- **Medium**: 0/8 fixed
 
 ---
 

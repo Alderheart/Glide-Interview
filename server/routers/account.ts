@@ -199,15 +199,12 @@ export const accountRouter = router({
         .from(transactions)
         .where(eq(transactions.accountId, input.accountId));
 
-      const enrichedTransactions = [];
-      for (const transaction of accountTransactions) {
-        const accountDetails = await db.select().from(accounts).where(eq(accounts.id, transaction.accountId)).get();
-
-        enrichedTransactions.push({
-          ...transaction,
-          accountType: accountDetails?.accountType,
-        });
-      }
+      // Add accountType to each transaction without additional queries
+      // Since all transactions belong to the same account we already fetched above
+      const enrichedTransactions = accountTransactions.map(transaction => ({
+        ...transaction,
+        accountType: account.accountType,
+      }));
 
       return enrichedTransactions;
     }),
