@@ -194,16 +194,28 @@ export default function SignupPage() {
                           || "Please enter a valid date of birth";
                       },
                       notFuture: (value) => {
-                        const birthDate = new Date(value);
-                        return birthDate < new Date() || "Date of birth cannot be in the future";
+                        // Parse date correctly as local date, not UTC
+                        const [year, month, day] = value.split('-').map(Number);
+                        const birthDate = new Date(year, month - 1, day);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0); // Normalize to midnight
+                        return birthDate <= today || "Date of birth cannot be in the future";
                       },
                       minAge: (value) => {
-                        const birthDate = new Date(value);
+                        // Parse date correctly as local date, not UTC
+                        const [year, month, day] = value.split('-').map(Number);
+                        const birthDate = new Date(year, month - 1, day);
                         const today = new Date();
+                        today.setHours(0, 0, 0, 0); // Normalize to midnight
+
+                        // Calculate age properly
                         const age = today.getFullYear() - birthDate.getFullYear();
                         const monthDiff = today.getMonth() - birthDate.getMonth();
                         const dayDiff = today.getDate() - birthDate.getDate();
+
+                        // Determine actual age accounting for month and day
                         const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+
                         return actualAge >= 18 || "You must be at least 18 years old";
                       },
                       maxAge: (value) => {

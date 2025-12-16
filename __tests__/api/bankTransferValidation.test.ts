@@ -15,9 +15,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { appRouter } from "@/server/routers";
 import { db } from "@/lib/db";
-import { users, accounts, transactions } from "@/lib/db/schema";
+import { users, accounts, transactions, sessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
+import { encryptSSN } from "@/lib/encryption/ssn";
 
 describe("VAL-207: Routing Number Optional (Bank Transfer Validation)", () => {
   let testUserId: number;
@@ -25,13 +26,15 @@ describe("VAL-207: Routing Number Optional (Bank Transfer Validation)", () => {
   let caller: any;
 
   beforeEach(async () => {
-    // Clean up test data
+    // Clean up test data in correct order (children before parents due to FK constraints)
     await db.delete(transactions).run();
     await db.delete(accounts).run();
+    await db.delete(sessions).run();
     await db.delete(users).run();
 
     // Create test user
     const hashedPassword = await bcrypt.hash("TestPass123!", 10);
+    const encryptedSSN = encryptSSN("123456789"); // Must be 9 digits without dashes
     const userResult = await db
       .insert(users)
       .values({
@@ -40,7 +43,7 @@ describe("VAL-207: Routing Number Optional (Bank Transfer Validation)", () => {
         firstName: "Routing",
         lastName: "Tester",
         dateOfBirth: "1990-01-01",
-        ssn: "123-45-6789",
+        ssn: encryptedSSN,
         address: "123 Test St",
         city: "Test City",
         state: "CA",

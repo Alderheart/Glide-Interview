@@ -66,25 +66,32 @@ export const authRouter = router({
             return !isNaN(parsedDate.getTime()) && date === parsedDate.toISOString().split('T')[0];
           }, "Please enter a valid date of birth")
           .refine((date) => {
-            const birthDate = new Date(date);
+            // Parse date correctly as local date, not UTC
+            const [year, month, day] = date.split('-').map(Number);
+            const birthDate = new Date(year, month - 1, day);
             const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize to midnight
             // First check if date is in the future
-            if (birthDate >= today) {
+            if (birthDate > today) {
               return false;
             }
             return true;
           }, "Date of birth cannot be in the future")
           .refine((date) => {
-            const birthDate = new Date(date);
+            // Parse date correctly as local date, not UTC
+            const [year, month, day] = date.split('-').map(Number);
+            const birthDate = new Date(year, month - 1, day);
             const today = new Date();
-            // Only check age if date is not in future
-            if (birthDate >= today) {
-              return true; // Skip age check for future dates
-            }
+            today.setHours(0, 0, 0, 0); // Normalize to midnight
+
+            // Calculate age properly
             const age = today.getFullYear() - birthDate.getFullYear();
             const monthDiff = today.getMonth() - birthDate.getMonth();
             const dayDiff = today.getDate() - birthDate.getDate();
+
+            // Determine actual age accounting for month and day
             const actualAge = monthDiff < 0 || (monthDiff === 0 && dayDiff < 0) ? age - 1 : age;
+
             return actualAge >= 18;
           }, "You must be at least 18 years old")
           .refine((date) => {

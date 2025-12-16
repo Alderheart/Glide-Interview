@@ -15,6 +15,7 @@ export default function DashboardPage() {
 
   const { data: accounts, refetch: refetchAccounts } = trpc.account.getAccounts.useQuery();
   const logoutMutation = trpc.auth.logout.useMutation();
+  const utils = trpc.useUtils();
 
   const handleLogout = async () => {
     try {
@@ -140,9 +141,12 @@ export default function DashboardPage() {
         <FundingModal
           accountId={fundingAccountId}
           onClose={() => setFundingAccountId(null)}
-          onSuccess={() => {
+          onSuccess={async () => {
             setFundingAccountId(null);
             refetchAccounts();
+            // Invalidate transaction cache for the funded account
+            // This ensures transaction history updates without page refresh
+            await utils.account.getTransactions.invalidate({ accountId: fundingAccountId });
           }}
         />
       )}

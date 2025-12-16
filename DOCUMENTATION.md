@@ -141,9 +141,9 @@ Test file: `__tests__/api/emailValidation.test.ts`
 
 ### VAL-202: Date of Birth Validation
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: Critical
 **Reporter**: Maria Garcia
-**Manual Testing**: ⏳ Pending
 
 #### Root Cause
 The date of birth field had no validation beyond checking if the field was empty. Both frontend and backend accepted any string value, allowing:
@@ -179,6 +179,27 @@ Implemented comprehensive date of birth validation in both frontend and backend 
 3. Properly handles edge cases like leap years and invalid calendar dates
 4. Custom error messages guide users to correct issues
 
+#### Additional Bug Found & Fixed - Timezone Parsing Issue
+**Discovery Date**: December 16, 2025
+**Issue**: During manual testing, discovered that "12/17/2007" was passing validation when it should fail (user is only 17 years old on 12/16/2025).
+
+**Root Cause**: JavaScript's `new Date("2007-12-17")` interprets the string as UTC midnight, which in local timezones (EST/CST) shifts to the previous day:
+- Input: "2007-12-17"
+- Parsed as: Dec 16, 2007 7:00pm EST (shifted from UTC midnight)
+- Age calculated as 18 instead of 17 ❌
+
+**Fix Applied** ([server/routers/auth.ts:68-96](server/routers/auth.ts#L68), [app/signup/page.tsx:196-220](app/signup/page.tsx#L196)):
+```typescript
+// Parse date components explicitly to avoid UTC timezone conversion
+const [year, month, day] = date.split('-').map(Number);
+const birthDate = new Date(year, month - 1, day); // Creates local midnight
+```
+
+**Verification**:
+- ✅ 12/17/2007 now correctly FAILS (user is 17 years old)
+- ✅ 12/16/2007 correctly PASSES (exactly 18 years old)
+- ✅ All edge cases validated
+
 #### Test Results
 All 19 validation tests passing:
 ```
@@ -198,11 +219,13 @@ Test file: `__tests__/validation/dateOfBirth.test.ts`
 3. **Precise Age Calculation**: Algorithm accounts for exact birth date, not just birth year
 4. **Clear Error Messages**: User-friendly messages guide correct input
 5. **Documentation**: Added inline comments explaining validation logic for maintainability
+6. **Timezone-Safe Parsing**: Always parse YYYY-MM-DD strings as local dates to avoid UTC conversion issues
 
 ---
 
 ### VAL-203: State Code Validation
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: Medium
 **Reporter**: Alex Thompson
 
@@ -304,6 +327,7 @@ Test file: `__tests__/validation/stateCode.test.ts`
 
 ### VAL-204: Phone Number Format
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: Medium
 **Reporter**: John Smith
 
@@ -468,6 +492,7 @@ Test file: `__tests__/validation/phoneNumber.test.ts`
 
 ### VAL-205: Zero Amount Funding
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: High
 **Reporter**: Lisa Johnson
 
@@ -557,6 +582,7 @@ Test file: `__tests__/api/zeroAmountFunding.test.ts`
 
 ### VAL-206: Card Number Validation
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: Critical
 **Reporter**: David Brown
 
@@ -630,8 +656,10 @@ Test file: `__tests__/validation/cardNumber.test.ts`
 
 ### VAL-207: Routing Number Optional
 **Status**: ✅ Fixed
+**Manual Testing**: ✅ Done
 **Priority**: High
 **Reporter**: Support Team
+**Test Note**: All 79 tests passing (39 unit + 40 integration)
 
 #### Root Cause
 Bank transfers could be submitted without routing numbers, causing ACH transfer failures. The vulnerability existed at multiple levels:
@@ -716,6 +744,7 @@ Test files:
 
 ### VAL-208: Weak Password Requirements
 **Status**: ✅ Fixed
+**Manual Testing**: ⏳ Pending
 **Priority**: Critical
 **Reporter**: Security Team
 
