@@ -55,8 +55,24 @@ describe("Session Expiry Security (PERF-403)", () => {
   describe("Exact Expiry Time Boundary", () => {
     it("should consider session VALID when expiry time equals current time", async () => {
       // This test should FAIL with current implementation (using >) and PASS after fix (using >=)
-      const now = new Date();
-      const exactExpiry = now.toISOString(); // Expiry time is exactly now
+      // Use a fixed timestamp to ensure exact match
+      const fixedTime = new Date("2024-12-15T20:00:00.000Z");
+
+      // Mock Date constructor to return our fixed time
+      const originalDate = global.Date;
+      const dateMock = vi.fn((...args) => {
+        if (args.length === 0) {
+          return new originalDate(fixedTime.getTime());
+        }
+        return new originalDate(...args);
+      });
+      dateMock.now = () => fixedTime.getTime();
+      dateMock.parse = originalDate.parse;
+      dateMock.UTC = originalDate.UTC;
+      Object.setPrototypeOf(dateMock, originalDate);
+      global.Date = dateMock as any;
+
+      const exactExpiry = fixedTime.toISOString(); // Expiry time is exactly now
 
       // Mock session with exact expiry time
       const mockSession = {
@@ -99,6 +115,9 @@ describe("Session Expiry Security (PERF-403)", () => {
       // This assertion will FAIL until the fix is implemented
       expect(ctx.user).toBeTruthy();
       expect(ctx.user?.email).toBe("test@example.com");
+
+      // Restore original Date
+      global.Date = originalDate;
     });
 
     it("should consider session INVALID when current time is after expiry", async () => {
