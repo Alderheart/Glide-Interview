@@ -9,6 +9,7 @@ import { eq, and, lt, gt } from "drizzle-orm";
 import { encryptSSN } from "@/lib/encryption/ssn";
 import { validatePassword } from "@/lib/validation/password";
 import { validateStateCodeForZod, getStateCodeError } from "@/lib/validation/stateCode";
+import { zodPhoneNumberValidator, getPhoneNumberError, validatePhoneNumber } from "@/lib/validation/phoneNumber";
 
 export const authRouter = router({
   signup: publicProcedure
@@ -55,7 +56,9 @@ export const authRouter = router({
           }, "Password cannot contain repeated characters"),
         firstName: z.string().min(1),
         lastName: z.string().min(1),
-        phoneNumber: z.string().regex(/^\+?\d{10,15}$/),
+        phoneNumber: z.string().refine(zodPhoneNumberValidator, (val) => ({
+          message: getPhoneNumberError(val)
+        })),
         dateOfBirth: z.string()
           .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be in YYYY-MM-DD format")
           .refine((date) => {
@@ -114,8 +117,13 @@ export const authRouter = router({
       // Encrypt the SSN before storing
       const encryptedSSN = encryptSSN(input.ssn);
 
+      // Normalize phone number to E.164 format
+      const phoneValidation = validatePhoneNumber(input.phoneNumber);
+      const normalizedPhone = phoneValidation.normalized || input.phoneNumber;
+
       await db.insert(users).values({
         ...input,
+        phoneNumber: normalizedPhone,
         ssn: encryptedSSN,
         password: hashedPassword,
       });
